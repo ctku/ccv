@@ -1,6 +1,44 @@
 #include "ccv.h"
 #include <sys/time.h>
 #include <ctype.h>
+#include <string.h>
+
+typedef struct {
+	char *img_fn;
+	int img_w;
+	int img_h;
+	ccv_array_t *words;
+	char username[64];
+	char text_label[64];
+} output_xml_t;
+
+void output_xml(output_xml_t *info)
+{
+	char xml_fn[64] = {0};
+	strcpy(xml_fn, info->img_fn);
+	char *cur = strrchr(xml_fn, '.');
+	strcpy(cur, ".TextDetct_ccv.xml");
+	strcat(cur, "\0");
+	FILE* w = fopen(xml_fn, "w");
+	fprintf(w, "<?xml version='1.0' encoding='UTF-8'?>\n");
+        fprintf(w, "<!--GEDI was developed at Language and Media Processing Laboratory, University of Maryland.-->\n");
+        fprintf(w, "<GEDI xmlns='http://lamp.cfar.umd.edu/media/projects/GEDI/' GEDI_version='2.3.24' GEDI_date='08/22/2012'>\n");
+	fprintf(w, "	<USER name='%s' date='8/22/2012 15:34' dateFormat='mm/dd/yyyy hh:mm'>	</USER>\n", info->username);
+	fprintf(w, "		<DL_DOCUMENT src='%s' docTag='xml' NrOfPages='1'>\n", info->img_fn);
+	fprintf(w, "			<DL_PAGE gedi_type='DL_PAGE' src='%s' pageID='1' width='%d' height='%d'>\n", info->img_fn, info->img_w, info->img_h);
+	int i;
+	for (i = 0; i < info->words->rnum; i++)
+	{
+		ccv_rect_t* rect = (ccv_rect_t*)ccv_array_get(info->words, i);
+		fprintf(w, "			<DL_ZONE gedi_type='TextBox' id='%d' col='%d' row='%d' width='%d' height='%d' Text='%s'> </DL_ZONE>\n", i+1, rect->x, 
+rect->y, rect->width, rect->height, info->text_label);
+	}
+	fprintf(w, "		</DL_PAGE>\n");
+	fprintf(w, "	</DL_DOCUMENT>\n");
+        fprintf(w, "</GEDI>\n");
+	fclose(w);
+	printf("XML file '%s' is outputed\n", xml_fn);
+}
 
 unsigned int get_current_time()
 {
@@ -27,6 +65,23 @@ int main(int argc, char** argv)
 			printf("%d %d %d %d\n", rect->x, rect->y, rect->width, rect->height);
 		}
 		printf("total : %d in time %dms\n", words->rnum, elapsed_time);
+		// output .xml file
+		if (argc == 4)
+		{
+			output_xml_t info;
+			info.img_fn = argv[1];
+			info.img_w = image->cols;
+			info.img_h = image->rows;
+			info.words = words;
+			if ((argv[2] == NULL) || (argv[3] == NULL))
+			{
+				printf("Usages: swtdetect 'filename' 1 'username' 'text_label'\n");
+				assert((argv[2] != NULL) && (argv[3] != NULL));
+			}
+			strcpy(info.username, argv[2]);
+			strcpy(info.text_label, argv[3]);
+			output_xml(&info);
+		}
 		ccv_array_free(words);
 		ccv_matrix_free(image);
 	} else {
